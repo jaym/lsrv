@@ -2,7 +2,7 @@ package lsrv
 
 import (
 	"bufio"
-	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -11,23 +11,17 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 )
 
-type ServiceEntry struct {
-	service_name    string
-	service_address string
-	service_port    uint16
-
-	// The service will respond to the address/port below
-	dest_address string
-	dest_port    uint16
-}
+// type ServiceEntry struct {
+//   service_name    string
+//   service_address string
+//   service_port    uint16
+//
+//   // The service will respond to the address/port below
+//   dest_address string
+//   dest_port    uint16
+// }
 
 func Spawn(socket_path string) error {
-	ipt, iperr := initializeIpTables()
-
-	if iperr != nil {
-		log.Fatal("Could not initialize IPTables: ", iperr)
-	}
-
 	ln, err := net.Listen("unix", socket_path)
 
 	if err != nil {
@@ -35,8 +29,10 @@ func Spawn(socket_path string) error {
 		return err
 	}
 
-	services := []ServiceEntry{}
+	// services := []ServiceEntry{}
 	start_ip := net.IPv4(172, 22, 0, 1)
+
+	manager := NewServiceManager("./state", start_ip)
 
 	for {
 		//TODO: err check
@@ -64,7 +60,7 @@ func Spawn(socket_path string) error {
 			//   OK
 			if len(command_split) != 5 {
 				log.Println("Could not parse command")
-				fd.Close()
+				fmt.Fprintf(fd, "ERROR Could not parse command")
 			} else {
 				service_port, serr := strconv.ParseUint(command_split[3], 10, 16)
 				dest_port, derr := strconv.ParseUint(command_split[4], 10, 16)
@@ -75,26 +71,41 @@ func Spawn(socket_path string) error {
 					break
 				}
 
-				entry := ServiceEntry{
-					service_name:    command_split[1],
-					service_address: command_split[2],
-					service_port:    uint16(service_port),
-					dest_address:    ipAdd(start_ip, len(services)).String(),
-					dest_port:       uint16(dest_port),
-				}
-
-				services = append(services, entry)
-				err = materialize(ipt, &services)
+				entry, err := manager.Add(command_split[1], command_split[2], uint16(service_port), uint16(dest_port))
 
 				if err != nil {
-					log.Println(err)
-					break
+					fmt.Fprintf(fd, "ERROR %s\n", err.Error())
+				} else {
+					fmt.Fprintf(fd, "OK %s\n", entry.DestAddress)
 				}
 
 				log.Println("Added ", entry)
 			}
+		case "DELETE":
+			if len(command_split) != 2 {
+				fmt.Fprintln(fd, "ERROR Could not parse command")
+			} else {
+				err := manager.Delete(command_split[1])
+				if err != nil {
+					fmt.Fprintf(fd, "ERROR %s\n", err.Error())
+				} else {
+					fmt.Fprintln(fd, "OK")
+				}
+			}
+		case "GETHOSTBYNAME":
+			if len(command_split) != 2 {
+				fmt.Fprintln(fd, "ERROR Could not parse command")
+			} else {
+				entry, err := manager.GetServiceEntry(command_split[1])
+				if err != nil {
+					fmt.Fprintf(fd, "ERROR %s\n", err.Error())
+				} else {
+					fmt.Fprintf(fd, "OK %s\n", entry.DestAddress)
+				}
+			}
 		default:
 			log.Println("Unknown command: ", command_split[0])
+			fmt.Fprintln(fd, "ERROR Unknown Command")
 		}
 		fd.Close()
 	}
@@ -111,9 +122,9 @@ func materialize(ipt *iptables.IPTables, services *[]ServiceEntry) error {
 	}
 
 	for _, entry := range *services {
-		rulespec := []string{"-p", "tcp", "-d", entry.dest_address, "--dport",
-			strconv.FormatUint(uint64(entry.dest_port), 10), "-j", "DNAT",
-			"--to", entry.service_address + ":" + strconv.FormatUint(uint64(entry.service_port), 10)}
+		rulespec := []string{"-p", "tcp", "-d", entry.DestAddress, "--dport",
+			strconv.FormatUint(uint64(entry.DestPort), 10), "-j", "DNAT",
+			"--to", entry.ServiceAddress + ":" + strconv.FormatUint(uint64(entry.ServicePort), 10)}
 		err = ipt.Append("nat", "LSRV", rulespec...)
 		if err != nil {
 			log.Fatal(err)
@@ -123,12 +134,12 @@ func materialize(ipt *iptables.IPTables, services *[]ServiceEntry) error {
 	return nil
 }
 
-func ipAdd(start net.IP, add int) net.IP { // IPv4 only
-	start = start.To4()
-	result := make(net.IP, 4)
-	binary.BigEndian.PutUint32(result, binary.BigEndian.Uint32(start)+uint32(add))
-	return result
-}
+// func ipAdd(start net.IP, add int) net.IP { // IPv4 only
+//   start = start.To4()
+//   result := make(net.IP, 4)
+//   binary.BigEndian.PutUint32(result, binary.BigEndian.Uint32(start)+uint32(add))
+//   return result
+// }
 
 func initializeIpTables() (*iptables.IPTables, error) {
 	ipt, err := iptables.New()
