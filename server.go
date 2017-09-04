@@ -12,7 +12,10 @@ import (
 
 func Spawn(socket_path string) error {
 	syscall.Unlink(socket_path)
+	// We allow members of the group
+	old_umask := syscall.Umask(0117)
 	ln, err := net.Listen("unix", socket_path)
+	syscall.Umask(old_umask)
 
 	if err != nil {
 		log.Fatal("Listen error: ", err)
