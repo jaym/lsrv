@@ -15,6 +15,8 @@ type ServiceManager struct {
 	services   map[string]ServiceEntry
 	state_path string
 	start_ip   net.IP
+	next_ip    string
+	free_ips   []string
 	ipt_man    *IPTablesManager
 }
 
@@ -27,10 +29,19 @@ type ServiceEntry struct {
 	DestPort    uint16
 }
 
+type StateFile struct {
+	Services map[string]ServiceEntry `json:"services"`
+	NextIp   string
+	FreeIps  []string
+}
+
 func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
 	manager := new(ServiceManager)
 	manager.state_path = state_path
 	manager.start_ip = start_ip
+	manager.next_ip = start_ip.String()
+	manager.services = make(map[string]ServiceEntry)
+	manager.free_ips = []string{}
 
 	ipt_man, err := NewIPTablesManager()
 
@@ -40,10 +51,20 @@ func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
 
 	manager.ipt_man = ipt_man
 
-	if _, err := os.Stat(state_path); os.IsNotExist(err) {
-		manager.services = make(map[string]ServiceEntry)
-	} else {
-		manager.services = load(state_path)
+	if _, err := os.Stat(state_path); !os.IsNotExist(err) {
+		state_file := load(state_path)
+
+		if state_file.Services != nil {
+			manager.services = state_file.Services
+		}
+
+		if state_file.FreeIps != nil {
+			manager.free_ips = state_file.FreeIps
+		}
+
+		if state_file.NextIp != "" {
+			manager.next_ip = state_file.NextIp
+		}
 	}
 
 	manager.ipt_man.Cleanup()
@@ -66,10 +87,21 @@ func (manager *ServiceManager) Add(service_name string, service_address string,
 		return entry, fmt.Errorf("Entry for service %s already exists", service_name)
 	}
 
+	var next_ip string
+
+	if len(manager.free_ips) > 0 {
+		next_ip, manager.free_ips = manager.free_ips[len(manager.free_ips)-1],
+			manager.free_ips[:len(manager.free_ips)-1]
+	} else {
+		next_ip = manager.next_ip
+		log.Printf("next_ip %+v\n", next_ip)
+		manager.next_ip = ipAdd(net.ParseIP(next_ip), 1).String()
+	}
+
 	entry = ServiceEntry{
 		ServiceAddress: service_address,
 		ServicePort:    service_port,
-		DestAddress:    ipAdd(manager.start_ip, len(manager.services)).String(),
+		DestAddress:    next_ip,
 		DestPort:       dest_port,
 	}
 
@@ -91,6 +123,7 @@ func (manager *ServiceManager) Delete(service_name string) error {
 
 	if err == nil {
 		delete(manager.services, service_name)
+		manager.free_ips = append(manager.free_ips, entry.DestAddress)
 		manager.serialize()
 	}
 
@@ -118,24 +151,34 @@ func (manager *ServiceManager) GetServiceEntry(service_name string) (ServiceEntr
 }
 
 func (manager *ServiceManager) serialize() {
-	services_json, _ := json.Marshal(manager.services)
+	services_json, err := json.Marshal(&StateFile{
+		Services: manager.services,
+		NextIp:   manager.next_ip,
+		FreeIps:  manager.free_ips,
+	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// This is not safe. This file should be moved into place
-	err := ioutil.WriteFile(manager.state_path, services_json, 0644)
+	log.Printf("Saving %s with %s\n", manager.state_path, services_json)
+	err = ioutil.WriteFile(manager.state_path, services_json, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func load(path string) map[string]ServiceEntry {
+func load(path string) StateFile {
 	raw, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var services map[string]ServiceEntry
-	json.Unmarshal(raw, &services)
+	var state_file StateFile
+	json.Unmarshal(raw, &state_file)
 
-	return services
+	return state_file
 }
 
 func ipAdd(start net.IP, add int) net.IP { // IPv4 only

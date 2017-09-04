@@ -11,16 +11,6 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 )
 
-// type ServiceEntry struct {
-//   service_name    string
-//   service_address string
-//   service_port    uint16
-//
-//   // The service will respond to the address/port below
-//   dest_address string
-//   dest_port    uint16
-// }
-
 func Spawn(socket_path string) error {
 	ln, err := net.Listen("unix", socket_path)
 
