@@ -25,7 +25,7 @@ We can add a service as follows:
 ```
 
 After running this command, `http://grafana.svc` will forward to `127.0.0.1:3000`. The command modifies
-updates `/etc/hosts`, however this may change to use an nsswitch module in the future. The iptables
+ `/etc/hosts`, however this may change to use an nsswitch module in the future. The iptables
 rules are added to the `nat` table under the `LSRV` chain. There will also be a rule to jump to that
 chain from the `OUTPUT` chain.
 
