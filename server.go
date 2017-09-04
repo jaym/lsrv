@@ -7,9 +7,11 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 func Spawn(socket_path string) error {
+	syscall.Unlink(socket_path)
 	ln, err := net.Listen("unix", socket_path)
 
 	if err != nil {
