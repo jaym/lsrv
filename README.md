@@ -50,3 +50,5 @@ There are some limitations I hope to fix:
   allow ip ranges and it's probably worth checking we remain in those bounds
 - There is a lack for configuration. A lot of things like the TLD, start ip,
   state file location, etc are hard coded
+- The CLI only allows creating ip addresses that forward to 127.0.0.1. This is
+  purely a limitation of the CLI interface. The server doesn't care
