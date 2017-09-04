@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,13 +24,25 @@ func Spawn(socket_path string) error {
 		return err
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		for sig := range c {
+			log.Printf("Stopping Server: received %v", sig)
+			ln.Close()
+		}
+	}()
+
 	start_ip := net.IPv4(172, 22, 0, 1)
 
 	manager := NewServiceManager("./state", start_ip)
 
 	for {
 		//TODO: err check
-		fd, _ := ln.Accept()
+		fd, err := ln.Accept()
+		if err != nil {
+			break
+		}
 		input := bufio.NewScanner(fd)
 
 		success := input.Scan()
