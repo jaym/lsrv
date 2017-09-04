@@ -13,7 +13,6 @@ import (
 )
 
 type ServiceManager struct {
-	// ip_allocator *IPAllocator
 	services   map[string]ServiceEntry
 	state_path string
 	start_ip   net.IP

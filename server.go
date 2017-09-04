@@ -7,8 +7,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
-	"github.com/coreos/go-iptables/iptables"
 )
 
 func Spawn(socket_path string) error {
@@ -19,7 +17,6 @@ func Spawn(socket_path string) error {
 		return err
 	}
 
-	// services := []ServiceEntry{}
 	start_ip := net.IPv4(172, 22, 0, 1)
 
 	manager := NewServiceManager("./state", start_ip)
@@ -100,80 +97,5 @@ func Spawn(socket_path string) error {
 		fd.Close()
 	}
 
-	return nil
-}
-
-func materialize(ipt *iptables.IPTables, services *[]ServiceEntry) error {
-	// Recreate the chain. This is wasteful and not zero downtime, but
-	// it's easy
-	err := createChain(ipt)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range *services {
-		rulespec := []string{"-p", "tcp", "-d", entry.DestAddress, "--dport",
-			strconv.FormatUint(uint64(entry.DestPort), 10), "-j", "DNAT",
-			"--to", entry.ServiceAddress + ":" + strconv.FormatUint(uint64(entry.ServicePort), 10)}
-		err = ipt.Append("nat", "LSRV", rulespec...)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	return nil
-}
-
-// func ipAdd(start net.IP, add int) net.IP { // IPv4 only
-//   start = start.To4()
-//   result := make(net.IP, 4)
-//   binary.BigEndian.PutUint32(result, binary.BigEndian.Uint32(start)+uint32(add))
-//   return result
-// }
-
-func initializeIpTables() (*iptables.IPTables, error) {
-	ipt, err := iptables.New()
-
-	if err != nil {
-		return nil, err
-	}
-
-	err = createChain(ipt)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return ipt, nil
-}
-
-func createChain(ipt *iptables.IPTables) error {
-	cleanup(ipt)
-
-	ipt.NewChain("nat", "LSRV")
-	ipt.AppendUnique("nat", "OUTPUT", "-jLSRV")
-
-	return nil
-}
-
-func cleanup(ipt *iptables.IPTables) error {
-	chains, err := ipt.ListChains("nat")
-	if err != nil {
-		return err
-	}
-
-	containsChain := false
-	for _, elem := range chains {
-		if elem == "LSRV" {
-			containsChain = true
-		}
-	}
-
-	if containsChain {
-		log.Println("Deleting chain LSRV")
-		ipt.Delete("nat", "OUTPUT", "-jLSRV")
-		ipt.ClearChain("nat", "LSRV")
-		ipt.DeleteChain("nat", "LSRV")
-	}
 	return nil
 }
