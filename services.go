@@ -1,6 +1,7 @@
 package lsrv
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 )
 
 type ServiceManager struct {
@@ -76,6 +78,10 @@ func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
 		manager.ipt_man.AddRule(entry.ServiceAddress, entry.ServicePort, entry.DestAddress, entry.DestPort)
 	}
 
+	if err = manager.write_etc_hosts(); err != nil {
+		log.Fatal(err)
+	}
+
 	return manager
 }
 
@@ -108,6 +114,11 @@ func (manager *ServiceManager) Add(service_name string, service_address string,
 	manager.services[service_name] = entry
 	manager.serialize()
 	manager.ipt_man.AddRule(entry.ServiceAddress, entry.ServicePort, entry.DestAddress, entry.DestPort)
+	err := manager.write_etc_hosts()
+
+	if err != nil {
+		return ServiceEntry{}, nil
+	}
 	return entry, nil
 }
 
@@ -125,6 +136,7 @@ func (manager *ServiceManager) Delete(service_name string) error {
 		delete(manager.services, service_name)
 		manager.free_ips = append(manager.free_ips, entry.DestAddress)
 		manager.serialize()
+		err = manager.write_etc_hosts()
 	}
 
 	return err
@@ -167,6 +179,49 @@ func (manager *ServiceManager) serialize() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// This function is temporary and will be replaced
+// by an nsswitch module
+func (manager *ServiceManager) write_etc_hosts() error {
+	infile, err := os.Open("/etc/hosts")
+	defer infile.Close()
+	outfile, err := os.Create("/etc/_hosts.lsrv")
+	defer outfile.Close()
+
+	if err != nil {
+		return err
+	}
+
+	input := bufio.NewScanner(infile)
+	writer := bufio.NewWriter(outfile)
+
+	for input.Scan() {
+		line := input.Text()
+		if !strings.Contains(line, "# __lsrv_managed") {
+			writer.WriteString(input.Text())
+			writer.WriteString("\n")
+		}
+	}
+
+	if err = input.Err(); err != nil {
+		return err
+	}
+
+	for service_name, entry := range manager.services {
+		fmt.Fprintf(writer, "%s %s.svc # __lsrv_managed\n", entry.DestAddress, service_name)
+	}
+
+	writer.Flush()
+
+	outfile.Close()
+
+	err = os.Rename("/etc/_hosts.lsrv", "/etc/hosts")
+
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func load(path string) StateFile {
