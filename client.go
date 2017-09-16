@@ -1,72 +1,61 @@
 package lsrv
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 )
 
 type Client struct {
-	socket string
+	manager *ServiceManager
 }
 
 func NewClient(socket string) *Client {
 	client := new(Client)
-	client.socket = socket
 
+	start_ip := net.IPv4(172, 22, 0, 1)
+	client.manager = NewServiceManager("./state", start_ip)
 	return client
 }
 
 func (client *Client) Add(service_name string, service_address string, service_port string, dest_port string) {
-	resp, err := client.execute_command(fmt.Sprintf("ADD %s %s %s %s", service_name, service_address,
-		service_port, dest_port))
+	service_port_i, err := strconv.ParseUint(service_port, 10, 16)
 
 	if err != nil {
-		log.Fatal(err)
-	} else {
-		log.Println(resp)
+		log.Fatal("Could not parse service port: ", err)
 	}
+
+	dest_port_i, err := strconv.ParseUint(dest_port, 10, 16)
+
+	if err != nil {
+		log.Fatal("Could not parse expose port: ", err)
+	}
+
+	entry, err := client.manager.Add(service_name, service_address, uint16(service_port_i), uint16(dest_port_i))
+
+	if err != nil {
+		log.Fatal("Could not add service entry: ", err)
+	}
+
+	fmt.Printf("%s.svc %s:%s\n", service_name, entry.DestAddress, dest_port)
 
 }
 
 func (client *Client) Delete(service_name string) {
-	resp, err := client.execute_command(fmt.Sprintf("DELETE %s", service_name))
-
+	err := client.manager.Delete(service_name)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Could not delete %s: %s", service_name, err)
 	} else {
-		log.Println(resp)
+		fmt.Printf("Removed %s\n", service_name)
 	}
-
 }
 
 func (client *Client) Resolve(service_name string) {
-	resp, err := client.execute_command(fmt.Sprintf("GETHOSTBYNAME %s", service_name))
-
+	entry, err := client.manager.GetServiceEntry(service_name)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Could not resolve %s: %s", service_name, err)
 	} else {
-		log.Println(resp)
-	}
-
-}
-
-func (client *Client) execute_command(command string) (string, error) {
-	conn, err := net.Dial("unix", client.socket)
-
-	if err != nil {
-		return "", err
-	}
-
-	defer conn.Close()
-
-	fmt.Fprintln(conn, command)
-
-	input := bufio.NewScanner(conn)
-	if input.Scan() {
-		return input.Text(), nil
-	} else {
-		return "", fmt.Errorf("Could not read response")
+		fmt.Printf("%s.svc %s:%d\n", service_name, entry.DestAddress, entry.DestPort)
 	}
 }

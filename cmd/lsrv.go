@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 
 	"github.com/jaym/lsrv"
@@ -24,16 +23,6 @@ func main() {
 	}
 
 	app.Commands = []cli.Command{
-		{
-			Name:    "server",
-			Aliases: []string{"s"},
-			Usage:   "Run the command server",
-			Action: func(c *cli.Context) error {
-				log.Printf("Starting server at %s\n", socket)
-				lsrv.Spawn(socket)
-				return nil
-			},
-		},
 		{
 			Name:        "add",
 			Usage:       "Add a service to be managed",
