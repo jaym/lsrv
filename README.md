@@ -10,14 +10,6 @@ This tool uses iptables to assign each service an IP address, and then DNAT to r
 and the correct port.
 
 ## Usage
-Begin by starting the server:
-
-```
-# ./bin/lsrv server
-```
-
-The server accepts commands on a UNIX domain socket and does the actual work.
-
 We can add a service as follows:
 
 ```
@@ -41,11 +33,20 @@ If we no longer wanted grafana to be mapped:
 # ./bin/lsrv rm grafana
 ```
 
+Changes may not persist across a reboot. You should restore the previous state after a reboot:
+```
+# ./bin/lsrv restore
+```
+
+You can cleanup the hosts file and iptables with the following command:
+```
+# ./bin/lsrv cleanup
+```
+
 ## Todo
 There are some limitations I hope to fix:
 
 - Only one entry per service name is allowed
-- `/etc/hosts` is directly modified, nsswitch module might be cleaner
 - Currently, only a start ip address is provided. A proper config should
   allow ip ranges and it's probably worth checking we remain in those bounds
 - There is a lack for configuration. A lot of things like the TLD, start ip,
