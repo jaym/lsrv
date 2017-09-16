@@ -68,19 +68,6 @@ func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
 		}
 	}
 
-	manager.ipt_man.Cleanup()
-	manager.ipt_man.Initialize()
-
-	// TODO: What if start_ip has changed
-	for service_name, entry := range manager.services {
-		log.Printf("Loaded %s: %+v\n", service_name, entry)
-		manager.ipt_man.AddRule(entry.ServiceAddress, entry.ServicePort, entry.DestAddress, entry.DestPort)
-	}
-
-	if err = manager.write_etc_hosts(); err != nil {
-		log.Fatal(err)
-	}
-
 	return manager
 }
 
@@ -113,7 +100,7 @@ func (manager *ServiceManager) Add(service_name string, service_address string,
 	manager.services[service_name] = entry
 	manager.serialize()
 	manager.ipt_man.AddRule(entry.ServiceAddress, entry.ServicePort, entry.DestAddress, entry.DestPort)
-	err := manager.write_etc_hosts()
+	err := manager.write_etc_hosts(true)
 
 	if err != nil {
 		return ServiceEntry{}, nil
@@ -135,7 +122,7 @@ func (manager *ServiceManager) Delete(service_name string) error {
 		delete(manager.services, service_name)
 		manager.free_ips = append(manager.free_ips, entry.DestAddress)
 		manager.serialize()
-		err = manager.write_etc_hosts()
+		err = manager.write_etc_hosts(true)
 	}
 
 	return err
@@ -161,6 +148,23 @@ func (manager *ServiceManager) GetServiceEntry(service_name string) (ServiceEntr
 	}
 }
 
+func (manager *ServiceManager) Restore() (map[string]ServiceEntry, error) {
+	//TODO: Return errors
+	manager.ipt_man.Cleanup()
+	manager.ipt_man.Initialize()
+
+	// TODO: What if start_ip has changed
+	for _, entry := range manager.services {
+		manager.ipt_man.AddRule(entry.ServiceAddress, entry.ServicePort, entry.DestAddress, entry.DestPort)
+	}
+
+	if err := manager.write_etc_hosts(true); err != nil {
+		return nil, err
+	}
+
+	return manager.services, nil
+}
+
 func (manager *ServiceManager) serialize() {
 	services_json, err := json.Marshal(&StateFile{
 		Services: manager.services,
@@ -173,7 +177,6 @@ func (manager *ServiceManager) serialize() {
 	}
 
 	// This is not safe. This file should be moved into place
-	log.Printf("Saving %s with %s\n", manager.state_path, services_json)
 	err = ioutil.WriteFile(manager.state_path, services_json, 0644)
 	if err != nil {
 		log.Fatal(err)
@@ -182,7 +185,7 @@ func (manager *ServiceManager) serialize() {
 
 // This function is temporary and will be replaced
 // by an nsswitch module
-func (manager *ServiceManager) write_etc_hosts() error {
+func (manager *ServiceManager) write_etc_hosts(include_lsrv bool) error {
 	infile, err := os.Open("/etc/hosts")
 	defer infile.Close()
 	outfile, err := os.Create("/etc/_hosts.lsrv")
@@ -207,8 +210,10 @@ func (manager *ServiceManager) write_etc_hosts() error {
 		return err
 	}
 
-	for service_name, entry := range manager.services {
-		fmt.Fprintf(writer, "%s %s.svc # __lsrv_managed\n", entry.DestAddress, service_name)
+	if include_lsrv {
+		for service_name, entry := range manager.services {
+			fmt.Fprintf(writer, "%s %s.svc # __lsrv_managed\n", entry.DestAddress, service_name)
+		}
 	}
 
 	writer.Flush()

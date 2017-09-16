@@ -59,3 +59,14 @@ func (client *Client) Resolve(service_name string) {
 		fmt.Printf("%s.svc %s:%d\n", service_name, entry.DestAddress, entry.DestPort)
 	}
 }
+
+func (client *Client) Restore() {
+	services, err := client.manager.Restore()
+	if err != nil {
+		log.Fatalf("Failed to restore: %s", err)
+	} else {
+		for service_name, entry := range services {
+			fmt.Printf("Restored %s.svc %s:%d\n", service_name, entry.DestAddress, entry.DestPort)
+		}
+	}
+}
