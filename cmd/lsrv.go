@@ -54,12 +54,24 @@ func main() {
 		{
 			Name:        "restore",
 			Usage:       "Restore all services",
-			Description: "Populates IPTables and the hosts file based on the current state",
+			Description: "Populates iptables and the hosts file based on the current state",
 			Action: func(c *cli.Context) error {
 				if len(c.Args()) != 0 {
 					cli.ShowCommandHelpAndExit(c, "restore", 1)
 				}
 				client().Restore()
+				return nil
+			},
+		},
+		{
+			Name:        "cleanup",
+			Usage:       "Remove all services from iptables and the hosts file",
+			Description: "Remove all services from iptables and the hosts file",
+			Action: func(c *cli.Context) error {
+				if len(c.Args()) != 0 {
+					cli.ShowCommandHelpAndExit(c, "cleanup", 1)
+				}
+				client().Cleanup()
 				return nil
 			},
 		},

@@ -70,3 +70,10 @@ func (client *Client) Restore() {
 		}
 	}
 }
+
+func (client *Client) Cleanup() {
+	err := client.manager.Cleanup()
+	if err != nil {
+		log.Fatalf("Failed to cleanup: %s", err)
+	}
+}

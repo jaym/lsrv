@@ -165,6 +165,16 @@ func (manager *ServiceManager) Restore() (map[string]ServiceEntry, error) {
 	return manager.services, nil
 }
 
+func (manager *ServiceManager) Cleanup() error {
+	//TODO: Return errors
+	manager.ipt_man.Cleanup()
+
+	if err := manager.write_etc_hosts(false); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (manager *ServiceManager) serialize() {
 	services_json, err := json.Marshal(&StateFile{
 		Services: manager.services,
