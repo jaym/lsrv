@@ -11,7 +11,7 @@ type Client struct {
 	manager *ServiceManager
 }
 
-func NewClient(socket string) *Client {
+func NewClient() *Client {
 	client := new(Client)
 
 	start_ip := net.IPv4(172, 22, 0, 1)

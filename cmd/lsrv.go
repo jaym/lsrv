@@ -7,20 +7,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-var socket string
-
 func main() {
 	app := cli.NewApp()
 	app.Name = "lsrv"
-
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "socket",
-			Value:       "/tmp/lsrv.sock",
-			Usage:       "UNIX domain socket to use",
-			Destination: &socket,
-		},
-	}
 
 	app.Commands = []cli.Command{
 		{
@@ -95,5 +84,5 @@ func main() {
 }
 
 func client() *lsrv.Client {
-	return lsrv.NewClient(socket)
+	return lsrv.NewClient()
 }
