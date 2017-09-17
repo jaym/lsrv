@@ -33,7 +33,8 @@ If we no longer wanted grafana to be mapped:
 # ./bin/lsrv rm grafana
 ```
 
-Changes may not persist across a reboot. You should restore the previous state after a reboot:
+Changes may not persist across a reboot. You should restore the previous state after a reboot.
+It may also be necessary to do a `restore` if the configuration changed.
 ```
 # ./bin/lsrv restore
 ```
@@ -42,6 +43,27 @@ You can cleanup the hosts file and iptables with the following command:
 ```
 # ./bin/lsrv cleanup
 ```
+
+## Configuration
+lsrv provides a TOML based configuration file. By default, lsrv looks for this file at
+`/etc/lsrv.toml`. If found, the file is parsed and configuration is taken from there. This
+can be overridden with the `--config` switch:
+
+```
+# ./bin/lsrv -c conf/lsrv.toml add prometheus 9090 80
+```
+
+Example configuration:
+```
+# ip_block is the ip block to allocate to services in
+# CIDR notation
+ip_block = "172.22.0.0/23"
+
+# state_file is the path where state kept by lsrv will
+# be stored
+state_file = "./state"
+```
+
 
 ## Todo
 There are some limitations I hope to fix:

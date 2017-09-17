@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"net"
 	"os"
 
 	"github.com/jaym/lsrv"
@@ -15,8 +16,12 @@ func main() {
 
 	flags := []cli.Flag{
 		altsrc.NewStringFlag(cli.StringFlag{
+			Name:  "ip_block",
+			Value: "172.22.0.0/24",
+		}),
+		altsrc.NewStringFlag(cli.StringFlag{
 			Name:  "state_file",
-			Value: "/var/lib/lsrv/state",
+			Value: "./state_file",
 		}),
 		cli.StringFlag{
 			Name:  "config, c",
@@ -25,7 +30,6 @@ func main() {
 	}
 
 	app.Before = func(c *cli.Context) error {
-		fmt.Println(c.String("config"))
 		f := altsrc.InitInputSourceWithContext(flags, altsrc.NewTomlSourceFromFlagFunc("config"))
 		f(c)
 		return nil
@@ -105,5 +109,9 @@ func main() {
 }
 
 func client(c *cli.Context) *lsrv.Client {
-	return lsrv.NewClient(c.Parent().String("state_file"))
+	_, ip_block, err := net.ParseCIDR(c.Parent().String("ip_block"))
+	if err != nil {
+		log.Fatal("Invalid ip_block: ", err)
+	}
+	return lsrv.NewClient(c.Parent().String("state_file"), ip_block)
 }

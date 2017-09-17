@@ -13,12 +13,13 @@ import (
 )
 
 type ServiceManager struct {
-	services   map[string]ServiceEntry
-	state_path string
-	start_ip   net.IP
-	next_ip    string
-	free_ips   []string
-	ipt_man    *IPTablesManager
+	services       map[string]ServiceEntry
+	state_path     string
+	ip_block       *net.IPNet
+	next_ip        string
+	free_ips       []string
+	ipt_man        *IPTablesManager
+	require_reload bool
 }
 
 type ServiceEntry struct {
@@ -34,13 +35,17 @@ type StateFile struct {
 	Services map[string]ServiceEntry `json:"services"`
 	NextIp   string
 	FreeIps  []string
+	IpBlock  string
 }
 
-func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
+func NewServiceManager(state_path string, ip_block *net.IPNet) *ServiceManager {
 	manager := new(ServiceManager)
 	manager.state_path = state_path
-	manager.start_ip = start_ip
-	manager.next_ip = start_ip.String()
+	manager.ip_block = ip_block
+
+	next_ip := find_next_ip(manager.ip_block.IP, ip_block)
+
+	manager.next_ip = next_ip.String()
 	manager.services = make(map[string]ServiceEntry)
 	manager.free_ips = []string{}
 
@@ -55,6 +60,10 @@ func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
 	if _, err := os.Stat(state_path); !os.IsNotExist(err) {
 		state_file := load(state_path)
 
+		if state_file.IpBlock != ip_block.String() {
+			manager.require_reload = true
+		}
+
 		if state_file.Services != nil {
 			manager.services = state_file.Services
 		}
@@ -64,7 +73,9 @@ func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
 		}
 
 		if state_file.NextIp != "" {
-			manager.next_ip = state_file.NextIp
+			if manager.ip_block.Contains(net.ParseIP(state_file.NextIp)) {
+				manager.next_ip = state_file.NextIp
+			}
 		}
 	}
 
@@ -74,20 +85,19 @@ func NewServiceManager(state_path string, start_ip net.IP) *ServiceManager {
 func (manager *ServiceManager) Add(service_name string, service_address string,
 	service_port uint16, dest_port uint16) (ServiceEntry, error) {
 
+	if manager.require_reload {
+		return ServiceEntry{}, fmt.Errorf("The configuration has changed. Please run the restore command.")
+	}
+
 	entry, present := manager.services[service_name]
 	if present {
 		return entry, fmt.Errorf("Entry for service %s already exists", service_name)
 	}
 
-	var next_ip string
+	next_ip, err := manager.allocate_ip()
 
-	if len(manager.free_ips) > 0 {
-		next_ip, manager.free_ips = manager.free_ips[len(manager.free_ips)-1],
-			manager.free_ips[:len(manager.free_ips)-1]
-	} else {
-		next_ip = manager.next_ip
-		log.Printf("next_ip %+v\n", next_ip)
-		manager.next_ip = ipAdd(net.ParseIP(next_ip), 1).String()
+	if err != nil {
+		return ServiceEntry{}, err
 	}
 
 	entry = ServiceEntry{
@@ -100,7 +110,7 @@ func (manager *ServiceManager) Add(service_name string, service_address string,
 	manager.services[service_name] = entry
 	manager.serialize()
 	manager.ipt_man.AddRule(entry.ServiceAddress, entry.ServicePort, entry.DestAddress, entry.DestPort)
-	err := manager.write_etc_hosts(true)
+	err = manager.write_etc_hosts(true)
 
 	if err != nil {
 		return ServiceEntry{}, nil
@@ -110,6 +120,10 @@ func (manager *ServiceManager) Add(service_name string, service_address string,
 
 func (manager *ServiceManager) Delete(service_name string) error {
 	entry, err := manager.GetServiceEntry(service_name)
+
+	if manager.require_reload {
+		return fmt.Errorf("The configuration has changed. Please run the restore command.")
+	}
 
 	if err != nil {
 		return err
@@ -153,7 +167,23 @@ func (manager *ServiceManager) Restore() (map[string]ServiceEntry, error) {
 	manager.ipt_man.Cleanup()
 	manager.ipt_man.Initialize()
 
-	// TODO: What if start_ip has changed
+	var requires_serialize bool
+	for service_name, entry := range manager.services {
+		if !manager.ip_block.Contains(net.ParseIP(entry.DestAddress)) {
+			new_ip, err := manager.allocate_ip()
+			if err != nil {
+				return nil, err
+			}
+			entry.DestAddress = new_ip
+			manager.services[service_name] = entry
+			requires_serialize = true
+		}
+	}
+
+	if requires_serialize {
+		manager.serialize()
+	}
+
 	for _, entry := range manager.services {
 		manager.ipt_man.AddRule(entry.ServiceAddress, entry.ServicePort, entry.DestAddress, entry.DestPort)
 	}
@@ -180,6 +210,7 @@ func (manager *ServiceManager) serialize() {
 		Services: manager.services,
 		NextIp:   manager.next_ip,
 		FreeIps:  manager.free_ips,
+		IpBlock:  manager.ip_block.String(),
 	})
 
 	if err != nil {
@@ -250,9 +281,40 @@ func load(path string) StateFile {
 	return state_file
 }
 
-func ipAdd(start net.IP, add int) net.IP { // IPv4 only
-	start = start.To4()
-	result := make(net.IP, 4)
-	binary.BigEndian.PutUint32(result, binary.BigEndian.Uint32(start)+uint32(add))
-	return result
+func (manager *ServiceManager) allocate_ip() (string, error) {
+	var next_ip string
+	for {
+		if len(manager.free_ips) <= 0 {
+			break
+		}
+
+		next_ip, manager.free_ips = manager.free_ips[len(manager.free_ips)-1],
+			manager.free_ips[:len(manager.free_ips)-1]
+
+		if manager.ip_block.Contains(net.ParseIP(next_ip)) {
+			return next_ip, nil
+		}
+	}
+
+	next_ip = manager.next_ip
+	if manager.ip_block.Contains(net.ParseIP(next_ip)) {
+		log.Printf("next_ip %+v\n", next_ip)
+		next := find_next_ip(net.ParseIP(next_ip), manager.ip_block)
+		manager.next_ip = next.String()
+		return next_ip, nil
+	} else {
+		return "", fmt.Errorf("IP block exhausted")
+	}
+}
+
+func find_next_ip(last_ip net.IP, ip_block *net.IPNet) *net.IP {
+	last_ip_i := last_ip.To4()
+	for {
+		result := make(net.IP, 4)
+		binary.BigEndian.PutUint32(result, binary.BigEndian.Uint32(last_ip_i)+1)
+		last_ip_i = result
+		if !(last_ip_i[3] == 0 || last_ip_i[3] == 255) {
+			return &last_ip_i
+		}
+	}
 }

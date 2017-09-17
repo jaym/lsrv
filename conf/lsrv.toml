@@ -1,3 +1,0 @@
-ip_block = "172.22.0.1/23"
-# state_file = "/var/lib/lsrv/state_file"
-state_file = "./state"

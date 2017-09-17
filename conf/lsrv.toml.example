@@ -1,0 +1,7 @@
+# ip_block is the ip block to allocate to services in
+# CIDR notation
+ip_block = "172.22.0.0/23"
+
+# state_file is the path where state kept by lsrv will
+# be stored
+state_file = "./state"
