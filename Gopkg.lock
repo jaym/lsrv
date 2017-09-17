@@ -2,20 +2,32 @@
 
 
 [[projects]]
+  name = "github.com/BurntSushi/toml"
+  packages = ["."]
+  revision = "b26d9c308763d68093482582cea63d69be07a0f0"
+  version = "v0.3.0"
+
+[[projects]]
   name = "github.com/coreos/go-iptables"
   packages = ["iptables"]
   revision = "259c8e6a4275d497442c721fa52204d7a58bde8b"
   version = "v0.2.0"
 
 [[projects]]
-  name = "github.com/urfave/cli"
-  packages = ["."]
+  name = "gopkg.in/urfave/cli.v1"
+  packages = [".","altsrc"]
   revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
   version = "v1.20.0"
+
+[[projects]]
+  branch = "v2"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  revision = "eb3733d160e74a9c7e442f435eb3bea458e1d19f"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f6b84b91b6415deb761a708d103b795c9c76aeb246e7a926dba7d0cee87f906d"
+  inputs-digest = "4f29ed10bb79a0705125dd8d58981065eda34dcaca408a6076381a4a92b7450f"
   solver-name = "gps-cdcl"
   solver-version = 1

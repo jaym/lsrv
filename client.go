@@ -11,11 +11,11 @@ type Client struct {
 	manager *ServiceManager
 }
 
-func NewClient() *Client {
+func NewClient(state_file string) *Client {
 	client := new(Client)
 
 	start_ip := net.IPv4(172, 22, 0, 1)
-	client.manager = NewServiceManager("./state", start_ip)
+	client.manager = NewServiceManager(state_file, start_ip)
 	return client
 }
 

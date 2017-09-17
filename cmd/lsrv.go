@@ -1,15 +1,36 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/jaym/lsrv"
-	"github.com/urfave/cli"
+	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1/altsrc"
 )
 
 func main() {
 	app := cli.NewApp()
 	app.Name = "lsrv"
+
+	flags := []cli.Flag{
+		altsrc.NewStringFlag(cli.StringFlag{
+			Name:  "state_file",
+			Value: "/var/lib/lsrv/state",
+		}),
+		cli.StringFlag{
+			Name:  "config, c",
+			Value: "/etc/lsrv.toml",
+		},
+	}
+
+	app.Before = func(c *cli.Context) error {
+		fmt.Println(c.String("config"))
+		f := altsrc.InitInputSourceWithContext(flags, altsrc.NewTomlSourceFromFlagFunc("config"))
+		f(c)
+		return nil
+	}
+	app.Flags = flags
 
 	app.Commands = []cli.Command{
 		{
@@ -22,7 +43,7 @@ func main() {
 					cli.ShowCommandHelpAndExit(c, "add", 1)
 				}
 				args := c.Args()
-				client().Add(args[0], "127.0.0.1", args[1], args[2])
+				client(c).Add(args[0], "127.0.0.1", args[1], args[2])
 				return nil
 			},
 		},
@@ -36,7 +57,7 @@ func main() {
 					cli.ShowCommandHelpAndExit(c, "rm", 1)
 				}
 				args := c.Args()
-				client().Delete(args[0])
+				client(c).Delete(args[0])
 				return nil
 			},
 		},
@@ -48,7 +69,7 @@ func main() {
 				if len(c.Args()) != 0 {
 					cli.ShowCommandHelpAndExit(c, "restore", 1)
 				}
-				client().Restore()
+				client(c).Restore()
 				return nil
 			},
 		},
@@ -60,7 +81,7 @@ func main() {
 				if len(c.Args()) != 0 {
 					cli.ShowCommandHelpAndExit(c, "cleanup", 1)
 				}
-				client().Cleanup()
+				client(c).Cleanup()
 				return nil
 			},
 		},
@@ -73,7 +94,7 @@ func main() {
 					cli.ShowCommandHelpAndExit(c, "resolve", 1)
 				}
 				args := c.Args()
-				client().Resolve(args[0])
+				client(c).Resolve(args[0])
 				return nil
 			},
 		},
@@ -83,6 +104,6 @@ func main() {
 
 }
 
-func client() *lsrv.Client {
-	return lsrv.NewClient()
+func client(c *cli.Context) *lsrv.Client {
+	return lsrv.NewClient(c.Parent().String("state_file"))
 }
