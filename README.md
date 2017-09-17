@@ -62,6 +62,9 @@ ip_block = "172.22.0.0/23"
 # state_file is the path where state kept by lsrv will
 # be stored
 state_file = "./state"
+
+# hosts_file is where host names will be stored.
+hosts_file = "/etc/hosts"
 ```
 
 
@@ -69,9 +72,5 @@ state_file = "./state"
 There are some limitations I hope to fix:
 
 - Only one entry per service name is allowed
-- Currently, only a start ip address is provided. A proper config should
-  allow ip ranges and it's probably worth checking we remain in those bounds
-- There is a lack for configuration. A lot of things like the TLD, start ip,
-  state file location, etc are hard coded
 - The CLI only allows creating ip addresses that forward to 127.0.0.1. This is
   purely a limitation of the CLI interface. The server doesn't care

@@ -5,3 +5,6 @@ ip_block = "172.22.0.0/23"
 # state_file is the path where state kept by lsrv will
 # be stored
 state_file = "./state"
+
+# hosts_file is where host names will be stored.
+hosts_file = "/etc/hosts"

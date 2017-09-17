@@ -20,6 +20,7 @@ type ServiceManager struct {
 	free_ips       []string
 	ipt_man        *IPTablesManager
 	require_reload bool
+	hosts_file     string
 }
 
 type ServiceEntry struct {
@@ -32,16 +33,18 @@ type ServiceEntry struct {
 }
 
 type StateFile struct {
-	Services map[string]ServiceEntry `json:"services"`
-	NextIp   string
-	FreeIps  []string
-	IpBlock  string
+	Services  map[string]ServiceEntry `json:"services"`
+	NextIp    string
+	FreeIps   []string
+	IpBlock   string
+	HostsFile string
 }
 
-func NewServiceManager(state_path string, ip_block *net.IPNet) *ServiceManager {
+func NewServiceManager(state_path string, ip_block *net.IPNet, hosts_file string) *ServiceManager {
 	manager := new(ServiceManager)
 	manager.state_path = state_path
 	manager.ip_block = ip_block
+	manager.hosts_file = hosts_file
 
 	next_ip := find_next_ip(manager.ip_block.IP, ip_block)
 
@@ -61,6 +64,10 @@ func NewServiceManager(state_path string, ip_block *net.IPNet) *ServiceManager {
 		state_file := load(state_path)
 
 		if state_file.IpBlock != ip_block.String() {
+			manager.require_reload = true
+		}
+
+		if state_file.HostsFile != hosts_file {
 			manager.require_reload = true
 		}
 
@@ -167,7 +174,6 @@ func (manager *ServiceManager) Restore() (map[string]ServiceEntry, error) {
 	manager.ipt_man.Cleanup()
 	manager.ipt_man.Initialize()
 
-	var requires_serialize bool
 	for service_name, entry := range manager.services {
 		if !manager.ip_block.Contains(net.ParseIP(entry.DestAddress)) {
 			new_ip, err := manager.allocate_ip()
@@ -176,11 +182,10 @@ func (manager *ServiceManager) Restore() (map[string]ServiceEntry, error) {
 			}
 			entry.DestAddress = new_ip
 			manager.services[service_name] = entry
-			requires_serialize = true
 		}
 	}
 
-	if requires_serialize {
+	if manager.require_reload {
 		manager.serialize()
 	}
 
@@ -207,10 +212,11 @@ func (manager *ServiceManager) Cleanup() error {
 
 func (manager *ServiceManager) serialize() {
 	services_json, err := json.Marshal(&StateFile{
-		Services: manager.services,
-		NextIp:   manager.next_ip,
-		FreeIps:  manager.free_ips,
-		IpBlock:  manager.ip_block.String(),
+		Services:  manager.services,
+		NextIp:    manager.next_ip,
+		FreeIps:   manager.free_ips,
+		IpBlock:   manager.ip_block.String(),
+		HostsFile: manager.hosts_file,
 	})
 
 	if err != nil {
@@ -224,12 +230,18 @@ func (manager *ServiceManager) serialize() {
 	}
 }
 
-// This function is temporary and will be replaced
-// by an nsswitch module
 func (manager *ServiceManager) write_etc_hosts(include_lsrv bool) error {
-	infile, err := os.Open("/etc/hosts")
+	infile, err := os.Open(manager.hosts_file)
+	if err != nil {
+		return err
+	}
 	defer infile.Close()
-	outfile, err := os.Create("/etc/_hosts.lsrv")
+
+	hosts_tmp_file := manager.hosts_file + "._lsrv"
+	outfile, err := os.Create(hosts_tmp_file)
+	if err != nil {
+		return err
+	}
 	defer outfile.Close()
 
 	if err != nil {
@@ -261,7 +273,7 @@ func (manager *ServiceManager) write_etc_hosts(include_lsrv bool) error {
 
 	outfile.Close()
 
-	err = os.Rename("/etc/_hosts.lsrv", "/etc/hosts")
+	err = os.Rename(hosts_tmp_file, manager.hosts_file)
 
 	if err != nil {
 		return err

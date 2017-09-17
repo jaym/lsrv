@@ -11,10 +11,10 @@ type Client struct {
 	manager *ServiceManager
 }
 
-func NewClient(state_file string, ip_block *net.IPNet) *Client {
+func NewClient(state_file string, ip_block *net.IPNet, hosts_file string) *Client {
 	client := new(Client)
 
-	client.manager = NewServiceManager(state_file, ip_block)
+	client.manager = NewServiceManager(state_file, ip_block, hosts_file)
 	return client
 }
 

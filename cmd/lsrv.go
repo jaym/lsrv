@@ -23,6 +23,10 @@ func main() {
 			Name:  "state_file",
 			Value: "./state_file",
 		}),
+		altsrc.NewStringFlag(cli.StringFlag{
+			Name:  "hosts_file",
+			Value: "/etc/hosts",
+		}),
 		cli.StringFlag{
 			Name:  "config, c",
 			Value: "/etc/lsrv.toml",
@@ -113,5 +117,5 @@ func client(c *cli.Context) *lsrv.Client {
 	if err != nil {
 		log.Fatal("Invalid ip_block: ", err)
 	}
-	return lsrv.NewClient(c.Parent().String("state_file"), ip_block)
+	return lsrv.NewClient(c.Parent().String("state_file"), ip_block, c.Parent().String("hosts_file"))
 }
