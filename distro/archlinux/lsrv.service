@@ -1,0 +1,14 @@
+[Unit]
+Description=lsrv
+After=iptables.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/mkdir -p /var/lib/lsrv
+ExecStart=/usr/bin/lsrv restore
+ExecReload=/usr/bin/lsrv restore
+ExecStop=/usr/bin/lsrv cleanup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

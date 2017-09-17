@@ -10,9 +10,12 @@ import (
 	"gopkg.in/urfave/cli.v1/altsrc"
 )
 
+var version string = "automatically defined"
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "lsrv"
+	app.Version = version
 
 	flags := []cli.Flag{
 		altsrc.NewStringFlag(cli.StringFlag{

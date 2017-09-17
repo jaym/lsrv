@@ -1,0 +1,5 @@
+bin/*
+distro/archlinux/*.tar.xz
+distro/archlinux/pkg
+distro/archlinux/src
+state
